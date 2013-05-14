@@ -21,10 +21,10 @@
 
 #define FIELD_WIDTH			10
 #define FIELD_HEIGHT		10
-#define NUMBER_OF_THREADS	100
+#define NUMBER_OF_THREADS	10
 
-float * state_first;		// on PC
-float * state_second;		// arrays
+float * state_first;	// on PC
+float * state_second;	// arrays
 
 float * dev_first_state;	// on Card
 float * dev_second_state;	// arrays
@@ -38,14 +38,15 @@ int height = FIELD_HEIGHT;
 __global__ void kernel(float * first, float * second , int * width, int * height)
 {
 	int id = threadIdx.x + blockIdx.x * blockDim.x;
+	
+	*(second + id) = 0;
 
-	if(id < (*width)*(*height))
+	if(id <= (*width)*(*height))
 	{
-		int numberofneighbours = 0;
-		
 		int num = 0;
 		
 		// change to num += ...
+		
 		/*
 		if(*(first + id + 1) == 1) num++;
 		if(*(first + id - 1) == 1) num++;
@@ -56,6 +57,7 @@ __global__ void kernel(float * first, float * second , int * width, int * height
 		if(*(first + id - *height + 1) == 1) num++;
 		if(*(first + id - *height - 1) == 1) num++;
 		*/
+		
 		num += *(first + id + 1);
 		num += *(first + id - 1);
 		num += *(first + id + *height);
@@ -94,10 +96,10 @@ void InitCudaArrays(int width, int height)
 	cudaError_t cudaStatus;
 
 	// Choose which GPU to run on, change this on a multi-GPU system.
-	cudaStatus = cudaSetDevice(0);
-	if (cudaStatus != cudaSuccess)
+    cudaStatus = cudaSetDevice(0);
+    if (cudaStatus != cudaSuccess)
 	{
-		fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
+        fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
 		return;
 	}
 
@@ -107,7 +109,7 @@ void InitCudaArrays(int width, int height)
 	cudaMalloc((void**)&dev_first_state,sizeof(float)*width*height);
 	cudaMalloc((void**)&dev_second_state,sizeof(float)*width*height);
 }
-
+// runs cuda device and returns result
 void RunCudaDevice()
 {
 	cudaError_t cudaStatus;
@@ -115,17 +117,17 @@ void RunCudaDevice()
 	int threads = NUMBER_OF_THREADS;
 	int blocks = (width*height)/(NUMBER_OF_THREADS + 1);
 	
-//	kernel <<<blocks,threads>>> (dev_first_state,dev_second_state,dev_width,dev_height);
-	kernel <<<10,10>>> (dev_first_state,dev_second_state,dev_width,dev_height);
+	kernel <<<threads,blocks>>> (dev_first_state,dev_second_state,dev_width,dev_height);
+//	kernel <<<10,10>>> (dev_first_state,dev_second_state,dev_width,dev_height);
 
 	cudaDeviceSynchronize();
 
 	// cudaDeviceSynchronize waits for the kernel to finish, and returns
-    	// any errors encountered during the launch.
-    	cudaStatus = cudaDeviceSynchronize();
-    	if (cudaStatus != cudaSuccess)
+    // any errors encountered during the launch.
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess)
 	{
-        	fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+        fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
 		return;
 	}
 
@@ -152,22 +154,27 @@ void FillField()
 	 *	
 	 */
 	
-	// two planers and a dot
-	
-	state_first[9*width+9] = 1;
+//	state_first[9*width+9] = 1;
 
-	state_first[2*width+1] = 1;
-	state_first[2*width+2] = 1;
-	state_first[3*width+2] = 1;
-	state_first[3*width+3] = 1;
-	state_first[1*width+3] = 1;
+	state_first[2*width+5] = 1;
+	state_first[2*width+6] = 1;
+	state_first[3*width+6] = 1;
+	state_first[3*width+7] = 1;
+	state_first[1*width+7] = 1;
 
+/*
 	state_first[7*width+1] = 1;
 	state_first[7*width+2] = 1;
 	state_first[8*width+2] = 1;
 	state_first[8*width+3] = 1;
 	state_first[6*width+3] = 1;
-
+*/
+/*
+	state_first[7*width+7] = 1;
+	state_first[7*width+8] = 1;
+	state_first[8*width+7] = 1;
+	state_first[8*width+8] = 1;
+*/
 }
 // allocate memory and initialize array with '0'
 void InitArrays(int width, int height)
@@ -195,23 +202,40 @@ void ShowArray(int width, int height)
 	puts("-----------------");
 }
 
+void CudaSwapArrays()
+{
+	float * t = dev_first_state;
+	dev_first_state = dev_second_state;
+	dev_second_state = t;
+	
+//	cudaMemset(dev_second_state,0,sizeof(float)*width*height); //checking
+}
+
 int main()
 {
 	InitArrays(FIELD_WIDTH,FIELD_HEIGHT);
+	
 	FillField();
 	
 	ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
 	
 	InitCudaArrays(FIELD_WIDTH,FIELD_HEIGHT);
 	CopyDataToCudaDevice(FIELD_WIDTH,FIELD_HEIGHT);
-//	printf("ok\n");
-	RunCudaDevice();
 	
-//	GetDataFromCudaDevice(FIELD_WIDTH,FIELD_HEIGHT);
+	RunCudaDevice();
+	ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
+	
+	for(int i=0;i<30;i++)
+	{
+		CudaSwapArrays();
+		RunCudaDevice();
+		ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
+	}
+	
 	FreeCudaDevice(FIELD_WIDTH,FIELD_HEIGHT);
 	
 	ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
 
-	char ch;
-	scanf("%c",&ch);
+//	char ch;
+//	scanf("%c",&ch);
 }

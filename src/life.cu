@@ -1,101 +1,62 @@
 /*
- *	THE GAME OF LIFE
- */
-
-
-/*
  *
  * compiling:
- * nvcc -lglut -LGLEW life.cu -o life
+ * nvcc -lglut -LGLEW life.cuda.cu -o life -g -G
+ * 
+ * -g -G  - debug options
  * 
  * for it's work:
  * export LD_LIBRARY_PATH=:/usr/local/cuda/lib
  * export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/libnvvp/
- *
+ * 
  * cuda-gdb
- *
  */
+
+#include "cuda_runtime.h"
+#include "device_launch_parameters.h"
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <memory.h>
+
 #include <GL/freeglut.h>
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <time.h>
 #include <fstream>
 
-#define cell_size 5
-#define uchar unsigned char
-#define screen_width 150
-#define screen_height 150
+#define cell_size			5
+#define uchar				unsigned char
+#define screen_width 		150
+#define screen_height 		150
 
-int width = screen_width*cell_size; //770; //1024;
-int height = screen_width*cell_size; //770; //768;
+#define FIELD_WIDTH			10
+#define FIELD_HEIGHT		10
+#define NUMBER_OF_THREADS	10
 
-uchar4 * screen = NULL;
-uchar field1[screen_width][screen_height];
-uchar field2[screen_width][screen_height];
+//int width = screen_width*cell_size; //770; //1024;
+//int height = screen_width*cell_size; //770; //768;
+
+float * state_first;	// on PC
+float * state_second;	// arrays
+
+float * dev_first_state;	// on Card
+float * dev_second_state;	// arrays
+
+int * dev_width;
+int * dev_height;
+
+int width = FIELD_WIDTH;
+int height = FIELD_HEIGHT;
 
 uchar4 color1,color2;
 
-void draw(void)
+void draw()
 {
 	glClearColor(0.0, 0.0, 0.0, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT);
 	glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, screen);
 	glFlush();
-}
-
-void draw_cube(int x, int y, int a, uchar4 color)
-{
-	for(int i=0;i<a;i++)
-		for(int j=0;j<a;j++)
-		{
-			screen[(x+j)*width+y+i] = color;
-		}
-}
-
-void draw_field()
-{
-	for(int i=0;i<screen_width;i++)
-		for(int j=0;j<screen_height;j++)
-		{
-			if(field1[i][j] == 1)
-				draw_cube(i*cell_size,j*cell_size,cell_size,color1);
-			if(field1[i][j] == 0)
-				draw_cube(i*cell_size,j*cell_size,cell_size,color2);
-		}
-}
-
-void transfer_cpu()
-{
-	int num=0;
-	
-	for(int i=0;i<screen_width;i++)
-		for(int j=0;j<screen_height;j++)
-		{
-			num = 0;
-			
-			if(i+1 < screen_width && field1[i+1][j] == 1) num++;
-			if(i-1 >= 0 && field1[i-1][j] == 1) num++;
-			if(j+1 < screen_height && field1[i][j+1] == 1) num++;
-			if(j-1 >= 0 && field1[i][j-1] == 1) num++;
-			if(i+1 < screen_width && j+1 < screen_height && field1[i+1][j+1] == 1) num++;
-			if(i-1 > 0 && j+1 < screen_height && field1[i-1][j+1] == 1) num++;
-			if(i+1 < screen_width && j-1 > 0 && field1[i+1][j-1] == 1) num++;
-			if(i-1 > 0 && j-1 > 0 && field1[i-1][j-1] == 1) num++;
-			
-			switch(num)
-			{
-				case 3 : field2[i][j] = 1; break;
-				case 2 : if(field1[i][j] == 1) field2[i][j] = 1; break;
-				default : field2[i][j] = 0; break;
-			}
-		}
-	
-	for(int i=0;i<screen_width;i++)
-		for(int j=0;j<screen_height;j++)
-			field1[i][j] = field2[i][j];
 }
 
 void key(unsigned char key, int x, int y)
@@ -116,57 +77,10 @@ void key(unsigned char key, int x, int y)
 	draw();
 }
 
-void init_screen()
-{
-	screen = (uchar4 *) malloc(width * height * sizeof(uchar4));
-	memset(screen, 0, width * height * sizeof(uchar4));
-}
-
-void field_to_zero(uchar * field)
-{
-	memset(field,0,height/cell_size*width/cell_size);
-}
-
-void gen()
-{
-	field1[0][0] = 1;
-	field1[0][1] = 1;
-	field1[0][2] = 1;
-	
-	field1[100][10] = 1;
-	field1[100][11] = 1;
-	field1[100][12] = 1;
-	
-	field1[7][10] = 1;
-	field1[8][9] = 1;
-	field1[8][8] = 1;
-	field1[9][9] = 1;
-	field1[9][10] = 1;
-	
-	
-	field1[4][1] = 1;
-	field1[2][2] = 1;
-	field1[3][2] = 1;
-	field1[3][3] = 1;
-	field1[4][3] = 1;
-	
-	field1[40][10] = 1;
-	field1[38][11] = 1;
-	field1[39][11] = 1;
-	field1[39][12] = 1;
-	field1[40][12] = 1;
-	
-	field1[70][90] = 1;
-	field1[70][91] = 1;
-	field1[70][92] = 1;
-	field1[69][89] = 1;
-	field1[69][90] = 1;
-	field1[69][91] = 1;
-}
-
 void timer(int = 0)
 {
 	transfer_cpu();
+	
 	draw_field();
 	draw();
 	glutTimerFunc(200, timer, 0);
@@ -180,20 +94,183 @@ void start()
 	timer();
 }
 
-void init_colors()
+__global__ void kernel(float * first, float * second , int * width, int * height)
 {
-	color1.x = 127;
-	color1.y = 255;
-	color1.z = 0;
-	color1.w = 0;
+	int id = threadIdx.x + blockIdx.x * blockDim.x;
 	
-	color2.x = 255;
-	color2.y = 255;
-	color2.z = 255;
-	color2.w = 255;
+	*(second + id) = 0;
+
+	if(id <= (*width)*(*height))
+	{
+		int num = 0;
+		
+		// change to num += ...
+		
+		/*
+		if(*(first + id + 1) == 1) num++;
+		if(*(first + id - 1) == 1) num++;
+		if(*(first + id + *height) == 1) num++;
+		if(*(first + id - *height) == 1) num++;
+		if(*(first + id + *height + 1) == 1) num++;
+		if(*(first + id + *height - 1) == 1) num++;
+		if(*(first + id - *height + 1) == 1) num++;
+		if(*(first + id - *height - 1) == 1) num++;
+		*/
+		
+		num += *(first + id + 1);
+		num += *(first + id - 1);
+		num += *(first + id + *height);
+		num += *(first + id - *height);
+		num += *(first + id + *height + 1);
+		num += *(first + id + *height - 1);
+		num += *(first + id - *height + 1);
+		num += *(first + id - *height - 1);
+		
+		switch(num)
+		{
+			case 3 : *(second + id) = 1; break;
+			case 2 : if(*(first + id) == 1) *(second + id) = 1; break;
+			default : *(second + id) = 0; break;
+		}
+		
+	}
 }
 
-int main(int argc, char** argv)
+void GetDataFromCudaDevice(int width, int height)
+{
+	cudaMemcpy(state_first,dev_second_state,sizeof(float)*width*height,cudaMemcpyDeviceToHost);
+}
+
+void CopyDataToCudaDevice(int width, int height)
+{
+	cudaMemcpy(dev_first_state,state_first,sizeof(float)*width*height,cudaMemcpyHostToDevice);
+	cudaMemset(dev_second_state,0,sizeof(float)*width*height);
+	
+	cudaMemcpy(dev_width,&width,sizeof(int),cudaMemcpyHostToDevice);
+	cudaMemcpy(dev_height,&height,sizeof(int),cudaMemcpyHostToDevice);
+}
+
+void InitCudaArrays(int width, int height)
+{
+	cudaError_t cudaStatus;
+
+	// Choose which GPU to run on, change this on a multi-GPU system.
+    cudaStatus = cudaSetDevice(0);
+    if (cudaStatus != cudaSuccess)
+	{
+        fprintf(stderr, "cudaSetDevice failed!  Do you have a CUDA-capable GPU installed?");
+		return;
+	}
+
+	cudaMalloc((void**)&dev_width,sizeof(int));
+	cudaMalloc((void**)&dev_height,sizeof(int));
+
+	cudaMalloc((void**)&dev_first_state,sizeof(float)*width*height);
+	cudaMalloc((void**)&dev_second_state,sizeof(float)*width*height);
+}
+// runs cuda device and returns result
+void RunCudaDevice()
+{
+	cudaError_t cudaStatus;
+
+	int threads = NUMBER_OF_THREADS;
+	int blocks = (width*height)/(NUMBER_OF_THREADS + 1);
+	
+	kernel <<<threads,blocks>>> (dev_first_state,dev_second_state,dev_width,dev_height);
+//	kernel <<<10,10>>> (dev_first_state,dev_second_state,dev_width,dev_height);
+
+	cudaDeviceSynchronize();
+
+	// cudaDeviceSynchronize waits for the kernel to finish, and returns
+    // any errors encountered during the launch.
+    cudaStatus = cudaDeviceSynchronize();
+    if (cudaStatus != cudaSuccess)
+	{
+        fprintf(stderr, "cudaDeviceSynchronize returned error code %d after launching addKernel!\n", cudaStatus);
+		return;
+	}
+
+	GetDataFromCudaDevice(FIELD_WIDTH,FIELD_HEIGHT);
+}
+
+void FreeCudaDevice(int width, int height)
+{
+	cudaFree(dev_first_state);
+	cudaFree(dev_second_state);
+	
+	cudaFree(dev_width);
+	cudaFree(dev_height);
+}
+
+void FillField()
+{
+	/*
+	 *	
+	 *	01010
+	 *	00110
+	 *	00100
+	 *	00000
+	 *	
+	 */
+	
+//	state_first[9*width+9] = 1;
+
+	state_first[2*width+5] = 1;
+	state_first[2*width+6] = 1;
+	state_first[3*width+6] = 1;
+	state_first[3*width+7] = 1;
+	state_first[1*width+7] = 1;
+
+/*
+	state_first[7*width+1] = 1;
+	state_first[7*width+2] = 1;
+	state_first[8*width+2] = 1;
+	state_first[8*width+3] = 1;
+	state_first[6*width+3] = 1;
+*/
+/*
+	state_first[7*width+7] = 1;
+	state_first[7*width+8] = 1;
+	state_first[8*width+7] = 1;
+	state_first[8*width+8] = 1;
+*/
+}
+// allocate memory and initialize array with '0'
+void InitArrays(int width, int height)
+{
+	state_first = (float *) malloc(sizeof(float)*width*height);
+	state_second = (float *) malloc(sizeof(float)*width*height);
+	
+	memset(state_first,0,sizeof(float)*width*height);
+	memset(state_second,0,sizeof(float)*width*height);
+}
+
+void ShowArray(int width, int height)
+{
+	puts("-----------------");
+	for(int i=0;i<width;i++)
+	{
+		for(int j=0;j<height;j++)
+		{
+			if(state_first[i*width+j] != 0)printf("*");
+			else printf(" ");
+		//	printf("%1.0f",state_first[i*width+j]);
+		}
+		printf("\n");
+	}
+	puts("-----------------");
+}
+
+void CudaSwapArrays()
+{
+	float * t = dev_first_state;
+	dev_first_state = dev_second_state;
+	dev_second_state = t;
+	
+//	cudaMemset(dev_second_state,0,sizeof(float)*width*height); //checking
+}
+
+void InitializwFreeGlut()
 {
 	// Initialize freeglut
 	glutInit(&argc, argv);
@@ -203,21 +280,46 @@ int main(int argc, char** argv)
 	glutDisplayFunc(draw);
 	glutKeyboardFunc(key);
 	glutSetOption(GLUT_ACTION_ON_WINDOW_CLOSE, GLUT_ACTION_CONTINUE_EXECUTION);
+}
 
-	init_screen();
-	
-	// Initialization of colors
-	init_colors();
-	
-	// Start of the program
-	start();
-	
-	// Display Image
-	glutMainLoop();
+void init_colors()
+{
+	color1.x = 127;
+	color1.y = 255;
+	color1.z = 0;
+	color1.w = 0;
 
-	// Free resources
-	free(screen);
-	screen = NULL;
+	color2.x = 255;
+	color2.y = 255;
+	color2.z = 255;
+	color2.w = 255;
+}
 
-	return 0;
+int main()
+{
+	InitArrays(FIELD_WIDTH,FIELD_HEIGHT);
+	
+	FillField();
+	
+	ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
+	
+	InitCudaArrays(FIELD_WIDTH,FIELD_HEIGHT);
+	CopyDataToCudaDevice(FIELD_WIDTH,FIELD_HEIGHT);
+	
+	RunCudaDevice();
+	ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
+	
+	for(int i=0;i<30;i++)
+	{
+		CudaSwapArrays();
+		RunCudaDevice();
+		ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
+	}
+	
+	FreeCudaDevice(FIELD_WIDTH,FIELD_HEIGHT);
+	
+	ShowArray(FIELD_WIDTH,FIELD_HEIGHT);
+
+//	char ch;
+//	scanf("%c",&ch);
 }
