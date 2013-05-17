@@ -11,8 +11,10 @@ __global__ void transfer_kernel(float * first, float * second , int * width, int
 	int id = threadIdx.x + blockIdx.x * blockDim.x;
 	
 	*(second + id) = 0;
+	
+	int size = *width * *height;
 
-	if(id <= (*width)*(*height))
+	if(id <= size)
 	{
 		int num = 0;
 		
@@ -27,6 +29,16 @@ __global__ void transfer_kernel(float * first, float * second , int * width, int
 		if(*(first + id - *height - 1) == 1) num++;
 		*/
 		
+		if(id + 1 <= size && *(first + id + 1) == 1) num++;
+		if(id - 1 >= 0 && *(first + id - 1) == 1) num++;
+		if(id + *height <= size && *(first + id + *height) == 1) num++;
+		if(id - *height >= 0 && *(first + id - *height) == 1) num++;
+		if(id + *height + 1 <= size && *(first + id + *height + 1) == 1) num++;
+		if(id + *height - 1 <= size && *(first + id + *height - 1) == 1) num++;
+		if(id - *height + 1 >= 0 && *(first + id - *height + 1) == 1) num++;
+		if(id - *height - 1 >= 0 && *(first + id - *height - 1) == 1) num++;
+		
+		/*
 		num += *(first + id + 1);
 		num += *(first + id - 1);
 		num += *(first + id + *height);
@@ -35,6 +47,7 @@ __global__ void transfer_kernel(float * first, float * second , int * width, int
 		num += *(first + id + *height - 1);
 		num += *(first + id - *height + 1);
 		num += *(first + id - *height - 1);
+		*/
 		
 		switch(num)
 		{
@@ -80,11 +93,11 @@ int InitCudaArrays(float ** dev_first_state, float ** dev_second_state, int ** d
 		return 1;
 	}
 
-	cudaMalloc((void**)&*dev_width,sizeof(int));
-	cudaMalloc((void**)&*dev_height,sizeof(int));
+	cudaMalloc((void**)&(*dev_width),sizeof(int));
+	cudaMalloc((void**)&(*dev_height),sizeof(int));
 
-	cudaMalloc((void**)&*dev_first_state,sizeof(float)*width*height);
-	cudaMalloc((void**)&*dev_second_state,sizeof(float)*width*height);
+	cudaMalloc((void**)&(*dev_first_state),sizeof(float)*width*height);
+	cudaMalloc((void**)&(*dev_second_state),sizeof(float)*width*height);
 	
 	return 0;
 }
