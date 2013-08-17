@@ -9,7 +9,7 @@ Feel free to comment.
 
 To build this, you must have cuda installed and glut dev.
 
-!!! ISN'T FINISHED YET
+ISN'T FINISHED YET
 =====================
 the-game-of-life-cuda
 =====================
